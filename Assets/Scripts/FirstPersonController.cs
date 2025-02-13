@@ -54,8 +54,18 @@ public class FirstPersonController : MonoBehaviour
     private void OnEnable()
     {
         playerInput.actions["Jump"].started += Jump;
-        //playerInput.actions["Move"].performed += Move; //Se dispara el evento SÓLO MIENTRAS HAYA CAMBIO DE VALOR.
-        //playerInput.actions["Move"].canceled += StopMoving;
+        playerInput.actions["Move"].performed += Move; //Se dispara el evento SÓLO MIENTRAS HAYA CAMBIO DE VALOR.
+        playerInput.actions["Move"].canceled += StopMoving;
+    }
+
+
+    private void Move(InputAction.CallbackContext context)
+    {
+        inputMando = context.ReadValue<Vector2>();
+    }
+    private void StopMoving(InputAction.CallbackContext context)
+    {
+        inputMando = Vector2.zero;
     }
 
     private void Jump(InputAction.CallbackContext context)
@@ -89,21 +99,14 @@ public class FirstPersonController : MonoBehaviour
 
     private void MoveAndRotate()
     {
-        //Lectura de inputs
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-
-        Vector2 input = new Vector2(h, v).normalized;
-
-
         //Se aplica al cuerpo la rotación que tenga la cámara.
         transform.rotation = Quaternion.Euler(0, cam.transform.eulerAngles.y, 0);
 
         ////Si hay input...
-        if (input.sqrMagnitude > 0)
+        if (inputMando.sqrMagnitude > 0)
         {
             //Se calcula el ángulo en base a los inputs
-            float angleToRotate = Mathf.Atan2(input.x, input.y) * Mathf.Rad2Deg + cam.transform.eulerAngles.y;
+            float angleToRotate = Mathf.Atan2(inputMando.x, inputMando.y) * Mathf.Rad2Deg + cam.transform.eulerAngles.y;
 
             //Se rota el vector (0, 0, 1) a dicho ángulo
             Vector3 movementInput = Quaternion.Euler(0, angleToRotate, 0) * Vector3.forward;
