@@ -6,69 +6,91 @@ using UnityEngine.InputSystem;
 
 public class FirstPersonController : MonoBehaviour
 {
+    [Header("-----Movement-----")]
     [SerializeField]
     private float movementSpeed;
-
     [SerializeField]
     private float gravityScale;
 
+    [Header("-----Jump-----")]
     [SerializeField]
     private float jumpHeight;
 
+    [Header("-----Crouch-----")]
     [SerializeField]
     private float originalScale;
-
     [SerializeField]
     private float scaleWhenCrouched;
-
     [SerializeField]
     private float crouchedSpeed;
 
-    [Header("Ground Detection")]
+    [Header("-----Head Bob-----")]
+    [SerializeField]
+    private Transform headBobAnchor;
+    [SerializeField]
+    private float bobFrequency;
+    [SerializeField]
+    private float bobAmplitude;
+
+    [Header("-----Ground Detection-----")]
     [SerializeField]
     private Transform feet;
-
     [SerializeField]
     private float detectionRadius;
-
     [SerializeField]
     private LayerMask whatIsGround;
 
-    private Vector3 verticalMovement;
+
     private CharacterController controller;
     private Camera cam;
 
+    private Vector3 verticalMovement;
+
+    private float bobTimer;
+    private Vector3 originalHeadPosition;
+
     private PlayerInput playerInput;
+    private Vector2 input;
 
-    private Rigidbody rb;
 
-    private Vector2 inputMando;
     private void Awake()
     {
-        controller = GetComponent<CharacterController>();
         playerInput = GetComponent<PlayerInput>();
-        rb = GetComponent<Rigidbody>();
+        controller = GetComponent<CharacterController>();
         cam = Camera.main;
         Cursor.lockState = CursorLockMode.Locked;
+
+        originalHeadPosition = headBobAnchor.localPosition;
     }
     private void OnEnable()
     {
         playerInput.actions["Jump"].started += Jump;
-        playerInput.actions["Move"].performed += Move; //Se dispara el evento SÓLO MIENTRAS HAYA CAMBIO DE VALOR.
-        playerInput.actions["Move"].canceled += StopMoving;
+        playerInput.actions["Move"].performed += Move;
+        playerInput.actions["Move"].canceled += MoveCancelled;
+        /*deshabilitar los controles del gameplay y activar los controles de la UI.
+        playerInput.SwitchCurrentActionMap("UI");*/
+
+        //si se desconecta el control que estes usando
+        playerInput.deviceLostEvent.AddListener((x) => Time.timeScale = 0f);
     }
-
-
-    private void Move(InputAction.CallbackContext context)
+    void Update()
     {
-        inputMando = context.ReadValue<Vector2>();
-    }
-    private void StopMoving(InputAction.CallbackContext context)
-    {
-        inputMando = Vector2.zero;
+        MoveAndRotate();
+        ApplyGravity();
+        ApplyHeadBob();
+        //Crouch();
     }
 
-    private void Jump(InputAction.CallbackContext context)
+
+    private void Move(InputAction.CallbackContext ctx)
+    {
+        input = ctx.ReadValue<Vector2>();
+    }
+    private void MoveCancelled(InputAction.CallbackContext ctx)
+    {
+        input = Vector2.zero;
+    }
+    private void Jump(InputAction.CallbackContext ctx)
     {
         if (IsGrounded())
         {
@@ -76,37 +98,45 @@ public class FirstPersonController : MonoBehaviour
             verticalMovement.y = Mathf.Sqrt(-2 * gravityScale * jumpHeight);
         }
     }
-
-    // Update is called once per frame
-    void Update()
+    private void ApplyHeadBob()
     {
-        MoveAndRotate();
-        ApplyGravity();
-        Crouch();
-    }
-
-    private void Crouch()
-    {
-        if(Input.GetKeyDown(KeyCode.LeftControl))
+        if (input.sqrMagnitude > 0 && IsGrounded()) // Solo si nos movemos y tocamos el suelo
         {
-            transform.localScale /= 2; //A la mitad TODO para que no deforme objetos.
+            bobTimer += Time.deltaTime * bobFrequency;
+            float horizontalBob = Mathf.Cos(bobTimer) * bobAmplitude;
+            float verticalBob = Mathf.Sin(bobTimer * 2) * bobAmplitude; // Más rápido en Y
+
+            headBobAnchor.localPosition = originalHeadPosition + new Vector3(horizontalBob, verticalBob, 0);
         }
-        else if(Input.GetKeyUp(KeyCode.LeftControl))
+        else
         {
-            transform.localScale *= 2;
+            bobTimer = 0;
+            headBobAnchor.localPosition = Vector3.Lerp(headBobAnchor.localPosition, originalHeadPosition, Time.deltaTime * 5f);
         }
     }
+
+    //private void Crouch()
+    //{
+    //    if(Input.GetKeyDown(KeyCode.LeftControl))
+    //    {
+    //        transform.localScale /= 2; //A la mitad TODO para que no deforme objetos.
+    //    }
+    //    else if(Input.GetKeyUp(KeyCode.LeftControl))
+    //    {
+    //        transform.localScale *= 2;
+    //    }
+    //}
 
     private void MoveAndRotate()
     {
         //Se aplica al cuerpo la rotación que tenga la cámara.
-        transform.rotation = Quaternion.Euler(0, cam.transform.eulerAngles.y, 0);
+        //transform.rotation = Quaternion.Euler(0, cam.transform.eulerAngles.y, 0);
 
         ////Si hay input...
-        if (inputMando.sqrMagnitude > 0)
+        if (input.sqrMagnitude > 0)
         {
             //Se calcula el ángulo en base a los inputs
-            float angleToRotate = Mathf.Atan2(inputMando.x, inputMando.y) * Mathf.Rad2Deg + cam.transform.eulerAngles.y;
+            float angleToRotate = Mathf.Atan2(input.x, input.y) * Mathf.Rad2Deg + cam.transform.eulerAngles.y;
 
             //Se rota el vector (0, 0, 1) a dicho ángulo
             Vector3 movementInput = Quaternion.Euler(0, angleToRotate, 0) * Vector3.forward;
